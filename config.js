@@ -77,7 +77,7 @@ const CONFIG = {
   "accentDark": "#e77408",
   "stats": [
     [
-      "12,000+",
+      "200+",
       "Jobs completed"
     ],
     [
