@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: junk-removal-site
+    runtime: static
+    buildCommand: node build.js
+    staticPublishPath: dist

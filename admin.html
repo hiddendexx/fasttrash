@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Site settings</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="wrap sec">
+<h1 style="font-size:clamp(2.2rem,6vw,3.4rem)">Site settings</h1>
+<p>Edit your details, upload a logo and job photos, preview the result, then download the files and put them in your project. This page never changes the live site by itself.</p>
+
+<h2>Business details</h2><div class="card" id="fields"></div>
+<h2 style="margin-top:32px">Logo</h2>
+<div class="card"><div id="logoBox"></div>
+ <label for="logoIn">Upload a logo (PNG, JPG or SVG)</label><input type="file" id="logoIn" accept="image/*">
+ <label class="opt" style="font-weight:400;margin-top:12px"><span><input type="checkbox" id="showName" style="width:auto;margin-right:8px">Show business name next to the logo</span></label></div>
+<h2 style="margin-top:32px">Social profiles</h2>
+<p>Paste the full link to each profile. Leave blank to hide it.</p>
+<div class="card" id="soc"></div>
+<h2 style="margin-top:32px">Search engine listing</h2>
+<p>Use {city}, {name}, {phone} and {region} to fill in your details automatically. Aim for titles under 60 characters and descriptions under 155.</p>
+<div class="card" id="seo"></div>
+<h2 style="margin-top:32px">Gallery photos</h2><div id="gal"></div>
+<p><button class="btn alt" type="button" id="add">Add a job</button></p>
+
+<h2 style="margin-top:32px">Preview and export</h2>
+<div class="card">
+ <p><button class="btn" type="button" id="prev">Preview site</button> <button class="btn alt" type="button" id="clr">Stop previewing</button></p>
+ <p><button class="btn" type="button" id="dlc">Download config.js</button> <button class="btn" type="button" id="dli">Download images</button></p>
+ <p id="msg" role="status"></p>
+ <p>Replace <code>config.js</code> in your project and put the downloaded images in the <code>images</code> folder. Your host then rebuilds the site.</p>
+</div>
+</main>
+<script src="config.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const S = JSON.parse(JSON.stringify(CONFIG));
+try { const o = JSON.parse(localStorage.getItem('siteOverride') || 'null'); if (o) Object.assign(S, o); } catch (e) {}
+const get = (o, p) => p.split('.').reduce((a, k) => a[k], o);
+const set = (o, p, v) => { const k = p.split('.'), l = k.pop(); k.reduce((a, x) => a[x], o)[l] = v; };
+const FIELDS = [['name','Business name'],['shortName','Short name (shown in header)'],['tagline','Tagline'],['phone','Phone'],['email','Email'],['addr.street','Street address'],['addr.city','City'],['addr.region','State or region'],['addr.zip','Postal code'],['serviceArea','Service area sentence'],['siteUrl','Website address, like https://www.yoursite.com'],['accentLight','Brand color, light mode','color'],['accentDark','Brand color, dark mode','color'],['formEndpoint','Form endpoint from Formspree or similar (optional)']];
+const field = (p, l, t) => `<label for="f-${p}">${l}</label><input id="f-${p}" data-p="${p}" type="${t || 'text'}" value="${esc(get(S, p))}">`;
+$('#fields').innerHTML = FIELDS.map(f => field(...f)).join('');
+$('#seo').innerHTML = Object.keys(S.seo).map(k => `<h3 style="margin-top:16px">${k}</h3>` + field(`seo.${k}.title`, 'Title') + field(`seo.${k}.description`, 'Description')).join('');
+const DEFAULT_SOCIAL = ['Facebook', 'Instagram', 'Google Business', 'TikTok', 'YouTube', 'X'];
+S.social = (Array.isArray(S.social) ? S.social : []).map(x => typeof x === 'string' ? { name: x.replace(/^https?:\/\/(www\.)?/, '').split('.')[0], url: x } : x);
+DEFAULT_SOCIAL.forEach(n => { if (!S.social.some(x => x.name === n)) S.social.push({ name: n, url: '' }); });
+$('#soc').innerHTML = S.social.map((x, i) => `<label for="s-${i}">${esc(x.name)}</label><input id="s-${i}" data-s="${i}" type="url" placeholder="https://" value="${esc(x.url)}">`).join('');
+$('#showName').checked = !!S.showNameWithLogo;
+
+const drawLogo = () => $('#logoBox').innerHTML = S.logo ? `<img src="${S.logo}" alt="Current logo" style="max-height:80px;max-width:240px">` : '<p>No logo yet. The site shows an emoji instead.</p>';
+const drawGallery = () => $('#gal').innerHTML = S.gallery.map((g, i) => `<div class="card" style="margin-bottom:16px"><div class="two"><div>
+ <label>Title</label><input data-g="${i}.title" value="${esc(g.title)}"><label>Category</label><input data-g="${i}.cat" value="${esc(g.cat)}"><label>Caption</label><input data-g="${i}.caption" value="${esc(g.caption)}"></div>
+ <div>${['before', 'after'].map(s => `<label>${s[0].toUpperCase() + s.slice(1)} photo</label>${g[s] ? `<img src="${g[s]}" alt="" style="max-width:100%;max-height:110px;border-radius:6px;display:block;margin-bottom:6px">` : ''}<input type="file" accept="image/*" data-up="${i}.${s}">`).join('')}</div></div>
+ <p style="margin-top:12px"><button class="btn alt" data-rm="${i}" type="button">Remove job</button></p></div>`).join('');
+drawLogo(); drawGallery();
+
+/* read an image, shrink it, return a data URI */
+const read = (file, max) => new Promise(res => {
+  if (file.type === 'image/svg+xml') { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file); return; }
+  const img = new Image();
+  img.onload = () => { const k = Math.min(1, max / img.width), c = document.createElement('canvas'); c.width = img.width * k; c.height = img.height * k; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', .85)); URL.revokeObjectURL(img.src); };
+  img.src = URL.createObjectURL(file);
+});
+
+document.addEventListener('input', e => { const d = e.target.dataset; if (d.p) set(S, d.p, e.target.value); if (d.s !== undefined) S.social[+d.s].url = e.target.value.trim(); if (d.g) { const [i, k] = d.g.split('.'); S.gallery[i][k] = e.target.value; } });
+document.addEventListener('change', async e => {
+  const d = e.target.dataset, f = e.target.files && e.target.files[0];
+  if (d.up && f) { const [i, s] = d.up.split('.'); S.gallery[i][s] = await read(f, 1400); drawGallery(); }
+  if (e.target.id === 'logoIn' && f) { S.logo = await read(f, 500); drawLogo(); }
+  if (e.target.id === 'showName') S.showNameWithLogo = e.target.checked;
+});
+document.addEventListener('click', e => { if (e.target.dataset.rm) { S.gallery.splice(+e.target.dataset.rm, 1); drawGallery(); } });
+$('#add').onclick = () => { S.gallery.push({ cat: '', title: 'New job', caption: '', icons: '📦🛋️📦', before: '', after: '' }); drawGallery(); };
+
+/* turn uploaded data URIs into file paths for export */
+function pack() {
+  const cfg = JSON.parse(JSON.stringify(S)), files = [];
+  const take = (v, name) => { if (!/^data:image\//.test(v || '')) return v; const m = v.match(/^data:image\/(\w+)/)[1], path = `images/${name}.${m === 'jpeg' ? 'jpg' : m}`; files.push([path, v]); return path; };
+  cfg.logo = take(cfg.logo, 'logo');
+  cfg.gallery.forEach((g, i) => { g.before = take(g.before, `job-${i + 1}-before`); g.after = take(g.after, `job-${i + 1}-after`); });
+  return { cfg, files };
+}
+const dl = (name, href) => { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); };
+const say = t => $('#msg').textContent = t;
+$('#prev').onclick = () => { try { localStorage.setItem('siteOverride', JSON.stringify(S)); open('index.html', '_blank'); say('Preview saved in this browser only.'); } catch (e) { say('Photos are too large to preview. Download the files instead.'); } };
+$('#clr').onclick = () => { localStorage.removeItem('siteOverride'); say('Preview cleared.'); };
+$('#dlc').onclick = () => { const { cfg } = pack(); dl('config.js', URL.createObjectURL(new Blob(['/* Generated by admin.html */\nconst CONFIG = ' + JSON.stringify(cfg, null, 2) + ';\n'], { type: 'text/javascript' }))); say('Saved config.js.'); };
+$('#dli').onclick = () => { const { files } = pack(); if (!files.length) return say('No new images to download.'); files.forEach(([p, v], i) => setTimeout(() => dl(p.split('/').pop(), v), i * 400)); say(`Downloading ${files.length} image(s). Put them in the images folder.`); };
+</script>
+</body>
+</html>
